@@ -10,6 +10,7 @@ router.post("/logout",captainController.logout)
 router.get("/profile", authMiddleware.captainAuth,captainController.profile)
 router.patch("/toggle-availability", authMiddleware.captainAuth, captainController.toggleAvailability)
 router.get('/new-ride', authMiddleware.captainAuth, captainController.waitForNewRide);
+router.get('/queue-status', authMiddleware.captainAuth, captainController.queueStatus);
 
 
 

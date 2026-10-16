@@ -6,11 +6,17 @@ const cookieParser = require("cookie-parser")
 const connectDB = require("./config/db")
 const morgan = require("morgan")
 const rabbitMQ = require("./services/rabbit")
+const rideWorker = require("./services/rideWorker")
 
 
 
-connectDB()
-rabbitMQ.connect()
+connectDB().then(async () => {
+	await rabbitMQ.connect()
+	await rideWorker.start()
+}).catch((error) => {
+	console.error("Captain service startup failed:", error.message)
+	process.exit(1)
+})
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))

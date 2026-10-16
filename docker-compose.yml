@@ -1,0 +1,86 @@
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
+
+  user:
+    build: ./user
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/userdb
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+      PORT: "3001"
+    depends_on:
+      - mongo
+      - rabbitmq
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  captain:
+    build: ./captain
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/captaindb
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-local-dev-internal-token}
+      RIDE_SERVICE_URL: http://ride:3003
+      DRIVER_WORKERS: ${DRIVER_WORKERS:-3}
+      PICKUP_DELAY_MS: ${PICKUP_DELAY_MS:-5000}
+      TRIP_DURATION_MS: ${TRIP_DURATION_MS:-15000}
+      PORT: "3002"
+    depends_on:
+      - mongo
+      - rabbitmq
+    ports:
+      - "3002:3002"
+    restart: unless-stopped
+
+  ride:
+    build: ./ride
+    env_file:
+      - .env
+    environment:
+      MONGO_URI: mongodb://mongo:27017/ridedb
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-local-dev-internal-token}
+      PORT: "3003"
+    depends_on:
+      - mongo
+      - rabbitmq
+    ports:
+      - "3003:3003"
+    restart: unless-stopped
+
+  gateway:
+    build: ./gateway
+    env_file:
+      - .env
+    environment:
+      PORT: "3000"
+    depends_on:
+      - user
+      - captain
+      - ride
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

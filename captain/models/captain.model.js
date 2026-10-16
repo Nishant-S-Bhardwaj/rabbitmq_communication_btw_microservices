@@ -18,6 +18,10 @@ const captainSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    currentRideId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null
+    },
     createdAt: {
         type: Date,
         default: Date.now

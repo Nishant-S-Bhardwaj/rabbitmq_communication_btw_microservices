@@ -2,7 +2,7 @@ const captainModel = require("../models/captain.model")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
 const blacklisttokenModel = require("../models/blacklisttoken.model")
-const { subscribeToQueue } = require("../services/rabbit")
+const { getQueueStatus } = require("../services/rabbit")
 
 const pendingRequests = []; 
 
@@ -91,6 +91,9 @@ async function profile(req, res) {
 async function toggleAvailability(req, res) {
     try {
         const captain = await captainModel.findById(req.captain._id);
+        if (captain.currentRideId) {
+            return res.status(409).json({ message: "Captain is completing a ride" });
+        }
         captain.isAvailable = !captain.isAvailable;
         await captain.save();
         res.send({ message: `Captain is now ${captain.isAvailable ? 'available' : 'unavailable'}` });
@@ -99,31 +102,36 @@ async function toggleAvailability(req, res) {
     }
 }
 async function waitForNewRide (req, res){
-    // Set timeout for long polling (e.g., 30 seconds)
-    req.setTimeout(30000, () => {
-        res.status(204).end(); // No Content
-    });
-
-    // Add the response object to the pendingRequests array
+    const timeout = setTimeout(() => {
+        pendingRequests.splice(pendingRequests.indexOf(res), 1);
+        res.status(204).end();
+    }, 30000);
+    res.on("close", () => clearTimeout(timeout));
     pendingRequests.push(res);
-};
+}
 
-subscribeToQueue("new-ride", (data) => {
-    const rideData = JSON.parse(data);
-
-    // Send the new ride data to all pending requests
-    pendingRequests.forEach(res => {
-        res.json(rideData);
+function notifyNewRide(ride) {
+    pendingRequests.splice(0).forEach((res) => {
+        if (!res.writableEnded) res.json(ride);
     });
+}
 
-    // Clear the pending requests
-    pendingRequests.length = 0;
-});
+async function queueStatus(req, res) {
+    try {
+        const { messageCount, consumerCount } = await getQueueStatus("new-ride");
+        res.json({ queue: "new-ride", messagesReady: messageCount, consumers: consumerCount });
+    } catch (error) {
+        res.status(503).json({ message: error.message });
+    }
+}
+
 module.exports = {
     register,
     login,
     logout,
     profile,
     toggleAvailability,
-    waitForNewRide
+    waitForNewRide,
+    notifyNewRide,
+    queueStatus
 }
